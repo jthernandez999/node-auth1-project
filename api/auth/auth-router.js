@@ -1,7 +1,8 @@
 const router = require('express').Router()
-const { add, findBy } = require('../users/users-model')
-const { checkUsernameExists, checkUsernameFree, checkPasswordLength, restricted } = require('./auth-middleware')
+const Users= require('../users/users-model')
+const { checkUsernameExists, checkUsernameFree, checkPasswordLength } = require('./auth-middleware')
 const bcrypt = require('bcryptjs')
+
 
 // Require `checkUsernameFree`, `checkUsernameExists` and `checkPasswordLength`
 // middleware functions from `auth-middleware.js`. You will need them here!
@@ -31,17 +32,27 @@ const bcrypt = require('bcryptjs')
     "message": "Password must be longer than 3 chars"
   }
  */
-router.post('/register', checkUsernameFree, checkPasswordLength, checkPasswordLength, async (req, res, next) => {
-  try {
-    const { username, password } = req.body
-    const hash = bcrypt.hashSync(password, 8)
-    const user = { username, password: hash }
-    const createdUser = await add(user)
-    res.status(201).json(createdUser)
-  } catch (err) {
-    next(err)
-  }
+router.post('/register', checkUsernameFree, checkPasswordLength, (req, res, next) => {
+  const { username, password } = req.body
+  const hash = bcrypt.hashSync(password, 8)
+
+  Users.add({ username, password: hash })
+    .then(saved => {
+      res.status(201).json(saved)
+    })
+    .catch(next)
 })
+// router.post('/register', checkUsernameFree, checkPasswordLength, async (req, res, next) => {
+//   try {
+//     const { username, password } = req.body
+//     const hash = bcrypt.hashSync(password, 8) // 2 ^ 8 
+//     const user = { username, password: hash }
+//     const createdUser = await add(user)
+//     res.status(201).json(createdUser)
+//   } catch (err) {
+//     next(err)
+//   }
+// })
 
 
 /**
@@ -60,22 +71,17 @@ router.post('/register', checkUsernameFree, checkPasswordLength, checkPasswordLe
   }
  */
 
-router.post('/login', async (req, res, next) => {
-  try {
-    const { username, password } = req.body
-    const [user] = await findBy({ username })
-
-    if (user && bcrypt.compareSync(password, user.password)) {
-      req.session.user = user
-      res.status(200).json({ message: `Welcome ${username}` })
+router.post('/login', checkUsernameExists, (req, res, next) => {
+    const { password } = req.body
+  
+    if (bcrypt.compareSync(password, req.user.password)) {
+      // make it so the cookie is set on the client 
+      // make it so the server stores a session with a session id
+      req.session.user = req.user
+      res.status(200).json({ message: `Welcome ${req.user.username}` })
     } else {
-      next({ status: 401, message: 'invalid credentials' })
+      next({ status: 401, message: 'Invalid credentials' })
     }
-
-  }
-  catch (err) {
-    next(err)
-  }
 })
 
 /**
